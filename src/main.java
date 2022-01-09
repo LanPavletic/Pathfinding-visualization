@@ -1,11 +1,33 @@
 import java.awt.*;
+import java.util.AbstractSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.PriorityQueue;
 import java.util.Scanner;
+import java.util.Set;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+
+// class NodeComparator implements Comparator<Node> {
+
+//     private int euclideanDistance(Node start, Node end) {
+//         return (int)Math.sqrt(Math.pow((double)start.x - (double)end.x, 2) + Math.pow((double)start.y - (double)end.y, 2));
+//     }
+
+//     @Override
+//     public int compare(Node node1, Node node2) {
+//         int h1 = euclideanDistance(node.getScore(), end.getScore());
+//         return 0;
+//     }
+
+// }
 
 class Path {
     ArrayList<Node> nodes;
@@ -302,25 +324,159 @@ class Maze {
         return allPaths;
     }
 
-    private int euclideanDistance(Node start, Node end) {
-        return (int)Math.sqrt(Math.pow((double)start.x - (double)end.x, 2) + Math.pow((double)start.y - (double)end.y, 2));
+    private double euclideanDistance(Node start, Node end) {
+        return Math.sqrt(Math.pow((double)start.x - (double)end.x, 2) + Math.pow((double)start.y - (double)end.y, 2)) * 10;
     }
 
-    public int aStar() {
+    public Path reconstruct_path(HashMap<Node, Node> cameFrom, Node current) {
+        Path path = new Path();
+        path.nodes.add(current);
+        
+
+        while (cameFrom.keySet().contains(current)) {
+            current = cameFrom.get(current);
+            path.nodes.add(current);
+        }
+
+        Collections.reverse(path.nodes);
+
+        for (Node node : path.nodes) {
+            ColorNode(node, Color.CYAN);
+        }
+        return path;
+    }
+
+    public Path aStar(Node start, Node end) throws InterruptedException {
+        Node current;
+        int tentative_gScore;
+
+        HashSet<Node> pq = new HashSet<Node>();
+        pq.add(start);
+
+        HashMap<Node, Integer> gScore = new HashMap<>();
+        HashMap<Node, Double> fScore = new HashMap<>();
+        HashMap<Node, Node> cameFrom = new HashMap<>();
+
+        gScore.put(start, 0);
+        fScore.put(start, euclideanDistance(start, end));
+
+        while(!pq.isEmpty()) {
+            double min = 99999999.0;
+            current = new Node(0, 0, 0);
+
+            for (Node node : pq) {
+                if (fScore.get(node) < min && node.value != -1 && !node.visited) {
+                    current = node;
+                    min = fScore.get(node);
+
+                }
+            }
+
+            current.visited = true;
+
+            if (current == end) {
+                return reconstruct_path(cameFrom, current);
+            }
+
+            pq.remove(current);
+            ColorNode(current, Color.pink);
+            Thread.sleep(50);
+            System.out.print(current);
+                     
+
+            for (Node neighbor : getAdjacentNodes(current)) {
+                tentative_gScore = gScore.get(current) + neighbor.value;
+
+
+                if ((gScore.get(neighbor) == null || tentative_gScore < gScore.get(neighbor))) {
+                    cameFrom.put(neighbor, current);
+                    gScore.put(neighbor, tentative_gScore);
+                    fScore.put(neighbor, tentative_gScore + euclideanDistance(neighbor, end));
+
+                    if (!pq.contains(neighbor)) {
+                        pq.add(neighbor);
+                    }
+                    
+                }
+            }
+        }
+        return null;
+    }
+
+    public ArrayList<Node> getTresures() {
+        ArrayList<Node> tresures = new ArrayList<>();
+
+        for (int i = 0; i < field.length; i++) {
+            for (int j = 0; j < field[i].length; j++) {
+                if (field[i][j].value == -3) {
+                    tresures.add(field[i][j]);
+                    if (tresures.size() == numOfTresures) {
+                        break;
+                    }
+                }
+            }
+        }
+    
+        return tresures;
+    }
+
+    public Node getMinTresure(ArrayList<Node> tresures, Node start) {
+        double min = 999999.9;
+        Node ret = start;
+        for (Node node : tresures) {
+            double curr = euclideanDistance(start, node);
+            System.out.println(curr);
+            if (curr < min) {
+                min = curr;
+                ret = node;
+            }
+        }
+        return ret;
+    }
+
+
+    public ArrayList<Path> getPaths_aStar() throws InterruptedException {
         Node start = getStart();
-        Node end = getEnd();
-        return euclideanDistance(start, end);
+        ArrayList<Path> allPaths = new ArrayList<>();
+        ArrayList<Node> tresures = getTresures();
+
+        while (!tresures.isEmpty()) {
+            Path path = new Path();
+            Node minTresure = getMinTresure(tresures, start);
+
+            System.out.println(minTresure);
+
+           
+            path = aStar(start, minTresure);
+            allPaths.add(path);
+            start = path.nodes.get(path.nodes.size() - 1);
+            resetVisited();
+            start.value = 0;
+            tresures.remove(tresures.indexOf(minTresure));
+        }
+
+        Path path = aStar(start, getEnd());
+        allPaths.add(path);
+        return allPaths;
     }
 }
 
 class Node {
-    int x, y, value;
+    int x, y, value, score;
     boolean visited = false;
 
     Node(int x, int y, int value) {
         this.x = x;
         this.y = y;
         this.value = value;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    public void setScore(int score) {
+        this.score = score;
     }
 
     @Override
@@ -339,10 +495,9 @@ class Node {
 
 
 class main {
-
-        
+       
     public static void main(String[] args) throws FileNotFoundException, InterruptedException {
-        Maze maze = new Maze("../labirinti/labyrinth_2.txt");
+        Maze maze = new Maze("../labirinti/labyrinth_3.txt");
         maze.draw();
 
         // ArrayList<Path> paths = maze.getPaths_BFS();
@@ -356,7 +511,12 @@ class main {
         // }
         // System.out.printf("cena: %d, premiki: %d", skupnaCena, skupnoPremikov);
 
-        System.out.println(maze.aStar());
+        // Path path = maze.aStar(maze.getStart(), maze.getEnd());
+
+        // System.out.printf("cena: %d, premiki: %d", path.caluculateLength(), path.calculateMoves());
+
+        System.out.println(maze.getPaths_aStar());
+
         
     }    
 }
